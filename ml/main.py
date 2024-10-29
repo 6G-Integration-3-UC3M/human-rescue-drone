@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 import torch
 import cv2
+import requests
 
 from api import get_drone_rules
 
@@ -117,6 +118,29 @@ while True:
                         text = f"{label}: {confidence:.2f}"
                         # Display the label above the bounding box
                         cv2.putText(frame, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+
+                        detection_data = {
+                            "droneIp": DRONE_IP,
+                            "secret": DRONE_SECRET,
+                            "missionName": MISSION_NAME,
+                            "detectedObject": label,
+                            "confidence": confidence,
+                        }
+
+                        image_encoded = cv2.imencode('.jpg', frame)[1].tobytes()  # Encode the image to send
+
+                        files = {
+                            "image": ('detected_image.jpg', image_encoded, 'image/jpeg')  # Provide a filename and content type
+                        }
+
+                        # Send the POST request with data and files
+                        response = requests.post(f"{URL_SERVER}/api/detection/add", data=detection_data, files=files)
+
+                        if response.status_code == 200:
+                            print("Response from server:", response.json())
+                        else:
+                            print("Failed to get a valid response.", response.text)
+
                         break  # Exit the loop once a matching rule is found
 
     # Display the frame with detections
