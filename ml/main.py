@@ -2,11 +2,24 @@ from ultralytics import YOLO
 import torch
 import cv2
 
+from api import get_drone_rules
+
 # Define some constants
-CONFIDENCE_THRESHOLD = 0.8
+CONFIDENCE_THRESHOLD = 0.8  # Minimum confidence for initial filtering
 GREEN = (0, 255, 0)
 DEVICE = "pc"  # Use 'jetson' for the RICOH THETA X with Jetson Nano, or 'pc' for a regular webcam
 NUM_FOLDS = 2  # Change this value to increase the number of folds for division (e.g., 2, 4, 8)
+ML_MODEL = "yolo11n.pt"
+
+# Server configuration
+URL_SERVER = "http://localhost:3000"
+DRONE_IP = "12.12.12.13"
+DRONE_SECRET = "DONT_SHARE_THIS_SECRET"
+MISSION_NAME = "Apollo Mission 1"
+
+# Get detection rules from the server
+rules = get_drone_rules(URL_SERVER, DRONE_IP, DRONE_SECRET, MISSION_NAME)
+print(f"Rules: {rules}")
 
 # Initialize video capture based on the device
 if DEVICE == "jetson":
@@ -22,9 +35,9 @@ if not cap.isOpened():
 
 # Load YOLOv8 model and move it to the GPU if using Jetson
 if DEVICE == "jetson":
-    model = YOLO("yolov8n.pt").to("cuda")  # Ensure the model runs on CUDA
+    model = YOLO(ML_MODEL).to("cuda")  # Ensure the model runs on CUDA
 else:
-    model = YOLO("yolov8n.pt")
+    model = YOLO(ML_MODEL)
 
 # Get class names from the model
 class_names = model.names  # Retrieve class names
@@ -82,27 +95,29 @@ while True:
                 # Extract the confidence associated with the detection
                 confidence = data[4]
 
-                # Filter out weak detections by ensuring the confidence is greater than the minimum
-                if float(confidence) < CONFIDENCE_THRESHOLD:
-                    continue
-
                 # Get the class ID and label
                 class_id = int(data[5])  # The class ID is stored in the 5th index
                 label = class_names[class_id]  # Get the label from class names
 
-                # Draw the bounding box on the fold if confidence is sufficient
-                xmin, ymin, xmax, ymax = (
-                    int(data[0] * x_scale) + x_start,
-                    int(data[1] * y_scale) + y_start,
-                    int(data[2] * x_scale) + x_start,
-                    int(data[3] * y_scale) + y_start,
-                )
-                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), GREEN, 2)
+                # Check against rules
+                for rule_id, rule in rules.items():
+                    # Ensure the rule is checking for a person with sufficient confidence
+                    if label == rule['object'] and confidence >= rule['confidence']['value']:
+                    # if True:
+                        # Draw the bounding box on the frame if conditions are met
+                        xmin, ymin, xmax, ymax = (
+                            int(data[0] * x_scale) + x_start,
+                            int(data[1] * y_scale) + y_start,
+                            int(data[2] * x_scale) + x_start,
+                            int(data[3] * y_scale) + y_start,
+                        )
+                        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), GREEN, 2)
 
-                # Prepare the text for the label and confidence
-                text = f"{label}: {confidence:.2f}"
-                # Display the label above the bounding box
-                cv2.putText(frame, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+                        # Prepare the text for the label and confidence
+                        text = f"{label}: {confidence:.2f}"
+                        # Display the label above the bounding box
+                        cv2.putText(frame, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, GREEN, 2)
+                        break  # Exit the loop once a matching rule is found
 
     # Display the frame with detections
     cv2.imshow("Input", frame)
