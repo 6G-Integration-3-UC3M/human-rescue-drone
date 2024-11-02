@@ -12,6 +12,7 @@ DEVICE = "pc"  # Use 'jetson' for the RICOH THETA X with Jetson Nano, or 'pc' fo
 NUM_FOLDS = 2  # Change this value to increase the number of folds for division (e.g., 2, 4, 8)
 ML_MODEL = "yolo11n.pt"
 
+
 # Server configuration
 URL_SERVER = "http://localhost:3000"
 DRONE_IP = "12.12.12.13"
