@@ -21,7 +21,7 @@ MISSION_NAME = "Apollo Mission 1"
 
 # Get detection rules from the server
 rules = get_drone_rules(URL_SERVER, DRONE_IP, DRONE_SECRET, MISSION_NAME)
-print(f"Rules: {rules}")
+print(f"Rules: " + rules )
 
 # Initialize video capture based on the device
 if DEVICE == "jetson":
