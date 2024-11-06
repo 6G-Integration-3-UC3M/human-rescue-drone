@@ -9,7 +9,7 @@ from api import get_drone_rules
 CONFIDENCE_THRESHOLD = 0.8  # Minimum confidence for initial filtering
 GREEN = (0, 255, 0)
 DEVICE = "pc"  # Use 'jetson' for the RICOH THETA X with Jetson Nano, or 'pc' for a regular webcam
-NUM_FOLDS = 2  # Change this value to increase the number of folds for division (e.g., 2, 4, 8)
+NUM_FOLDS = 1  # Change this value to increase the number of folds for division (e.g., 2, 4, 8)
 ML_MODEL = "yolo11n.pt"
 
 
@@ -21,7 +21,7 @@ MISSION_NAME = "Apollo Mission 1"
 
 # Get detection rules from the server
 rules = get_drone_rules(URL_SERVER, DRONE_IP, DRONE_SECRET, MISSION_NAME)
-print("Rules: " + rules )
+print(f"Rules: {rules}")
 
 # Initialize video capture based on the device
 if DEVICE == "jetson":
@@ -76,11 +76,16 @@ while True:
             # Extract the fold from the frame
             fold = frame[y_start:y_end, x_start:x_end]
 
-            # Resize the fold to 640x640 for YOLO inference
-            fold_resized = cv2.resize(fold, (640, 640), interpolation=cv2.INTER_AREA)
+            # Calculate the padding needed to make the fold height and width divisible by 32
+            pad_height = (32 - fold.shape[0] % 32) % 32
+            pad_width = (32 - fold.shape[1] % 32) % 32
+
+            # Pad the fold to make it divisible by 32
+            pad_color = (0, 0, 0)  # Padding color (black)
+            fold_padded = cv2.copyMakeBorder(fold, 0, pad_height, 0, pad_width, cv2.BORDER_CONSTANT, value=pad_color)
 
             # Convert the fold to a tensor
-            fold_tensor = torch.tensor(fold_resized, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
+            fold_tensor = torch.tensor(fold_padded, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0)
 
             # Move the fold tensor to GPU if using Jetson
             if DEVICE == "jetson":
@@ -90,8 +95,8 @@ while True:
             detections = model(fold_tensor)[0]
 
             # Scale factors for bounding box adjustments
-            x_scale = (x_end - x_start) / 640
-            y_scale = (y_end - y_start) / 640
+            x_scale = (x_end - x_start) / original_width
+            y_scale = (y_end - y_start) / original_height
 
             for data in detections.boxes.data.tolist():
                 # Extract the confidence associated with the detection
@@ -140,7 +145,7 @@ while True:
                         if response.status_code == 200:
                             print("Response from server:", response.json())
                         else:
-                            print("Failed to get a valid response.", response.text)
+                            print(f"Failed to get a valid response. {response.text}")
 
                         break  # Exit the loop once a matching rule is found
 
