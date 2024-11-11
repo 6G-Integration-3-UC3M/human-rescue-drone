@@ -1,5 +1,11 @@
 import requests
 import json
+import base64
+import os
+
+from dotenv import load_dotenv
+
+from groq import Groq
 
 def get_drone_rules(url_server, drone_ip, drone_secret, mission_name):
     url = f"{url_server}/api/drone/getRules"
@@ -49,3 +55,41 @@ def parse_rules(rules):
                 }
 
     return parsed_rules
+
+def enconde_image(image):
+    return base64.b64encode(image).decode('utf-8')
+
+def get_description_from_image_with_groq_cloud(image):
+    prompt = """
+    Given the image attached. Explain in 15 words or less what do you see. Focus on the main object.
+    For example: 'A human needing help stuck under a tree.'
+    """
+
+    encoded_image = enconde_image(image)
+
+    load_dotenv()
+    client = Groq(api_key = os.getenv("GROQ_API_KEY"))
+
+    completion = client.chat.completions.create(
+        model="llama-3.2-11b-vision-preview",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt,
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{encoded_image}",
+                        }
+                    }
+                ]
+            }
+        ],
+        stream=False,
+    )
+
+    return completion.choices[0].message.content
